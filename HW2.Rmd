@@ -1,0 +1,170 @@
+---
+title: 'STATS 216: HW2'
+author: "Xinbei Guan"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+ 4(d) Come up with your own data set of the form in (c) and fit a logistic regression to it in R. Plot your data, as well as the logistic regression fit $\hat{p}(x)$.  
+    You will probably get warning messages that the fit didn’t converge, and that you have numerically 0 or 1 fitted probabilities. The first message usually signals that you have fit a logistic regression to perfectly separable classes.
+```{r}
+x = rnorm(20,2,5)
+y = rep(0,20)
+y[x>3] = 1
+plot(x,y, col = "red", main = "Seperated at c = 3")
+df = data.frame(x,y)
+glmfit = glm(y~x,data = df, family = binomial)
+curve(predict(glmfit, data.frame(x), type = "response"), col = "blue", add = TRUE)
+```
+
+5. This question should be answered using the `Weekly` dataset, which is part of the `ISLR` package. This data is similar in nature to the `SMarket` data used in section 4.6 of our textbook, except that it contains 1,089 weekly returns for 21 years, from the beginning of 1990 to the end of 2010.  
+
+    (a) Only Lag2 is significant. The estimated value is 0.05844, and standard error is 0.0296.
+    (b) The confusion matrix shows that the model predicted the market right for (557+54) = 611 weeks. It correctly predicted the direction of the market 56% of the time.
+    (c) This time the logistic regression predicted the market correctly 57.6% of the time 
+    (d) Using LDA produced the same result as in (c) and predicted the market correctly 57.6% of the time
+    (e) The KNN method predicted the market direction correctly only 50.9% of the time
+    (f) Both logistics regression and LDA produce better result than KDD
+    (g) In scenario where the observations follow Gaussian Distribution with a common covariance matrix
+    (h) KNN model can outperform logistic regression when we know the decision boundary is highly non-linear
+```{r}
+library(ISLR)
+attach(Weekly)
+
+glm.fit = glm(Direction~.-Year-Today,data = Weekly,family=binomial)
+summary(glm.fit)
+glm.probs = predict(glm.fit, type = "response") 
+glm.pred = rep("Down", length(glm.probs)) 
+glm.pred[glm.probs > 0.5] = "Up" 
+table(glm.pred , Weekly$Direction)
+mean(glm.pred==Weekly$Direction) 
+
+train = Year<2009
+test = Year>=2009
+glm.fit2 = glm(Direction~+Lag1+Lag2+Lag3,data = Weekly,family=binomial, subset=train)
+glm.probs2 = predict(glm.fit2, type = "response",newdata = Weekly[test,])
+glm.pred2 = rep("Down", length(glm.probs2))
+glm.pred2[glm.probs2 > 0.5] = "Up" 
+table(glm.pred2 , Weekly[test,]$Direction)
+mean(glm.pred2==Weekly[test,]$Direction) 
+
+library(MASS) 
+lda.fit = lda(Direction~+Lag1+Lag2+Lag3,data = Weekly,subset=train)
+summary(lda.fit)
+lda.pred = predict(lda.fit, Weekly[test,])
+table(lda.pred$class , Weekly[test,]$Direction)
+mean(lda.pred$class==Weekly[test,]$Direction) 
+
+library(class)
+set.seed(2018)
+knn_train = cbind(Weekly[train,]$Lag1,Weekly[train,]$Lag2, Weekly[train,]$Lag3)
+knn_test = cbind(Weekly[test,]$Lag1,Weekly[test,]$Lag2, Weekly[test,]$Lag3)
+knn.fit = knn(knn_train, knn_test, Weekly[train,]$Direction, k = 3)
+table(knn.fit, Weekly[test,]$Direction)
+mean(knn.fit==Weekly[test,]$Direction)
+```
+
+6. 
+    (a) From the printout, we can see that these two teams only played one game and won. Therefore the model gave these two team the largest coefficient because the only one game is the only information that shows the model how these two team perform against other teams. 
+    (b) The logistic regression is more aligned with the AP and USA Today ranking.
+    (c) For the linear regression, we are confident about 77% of the teams regarding how they are against stanford. But for the logistic regression model, we are only confident about 62% of them. This agrees with the expected result of discarding information by setting yi = 0 or 1 in the logistic regression model.
+    (d) See below
+    (e) D = 266+231, n12 = 266. Both n12 and n21 are withing the 95% interval of D so both models are good at predicting results of games. But the p value in this case 0.12 and therefore we are not certain.
+```{r}
+teams = read.csv("C:/Users/xguan/Desktop/Winter2018/STATS216/hw2/teams.csv", as.is = TRUE)
+games = read.csv("C:/Users/xguan/Desktop/Winter2018/STATS216/hw2/games.csv", as.is = TRUE)
+all.teams = sort(unique(c(teams$team, games$home, games$away)))
+
+######(a) ###### 
+y = with(games, homeScore - awayScore)
+X = as.data.frame(matrix(0, nrow(games), length(all.teams)))
+colnames(X) = all.teams
+for (t in all.teams){
+  X[t] = 1*(games$home == t) - 1*(games$away == t)
+}
+
+X_s = X[, names(X) != "stanford-cardinal"]
+reg.season.games = which(games$gameType == "REG")
+mod = lm(y ~ 0 + ., data=X_s, subset=reg.season.games)
+
+adv <- 1 - games$neutralLocation
+mod2 <- glm(as.numeric(y>0) ~ 0 + adv + ., family=binomial, data=X_s, subset=reg.season.games) 
+sort(coef(mod2),decreasing = T)[1:2]
+games[games$home == "saint-mary-saint-mary" | games$away == "saint-mary-saint-mary",] 
+games[games$home == "st.-thomas-(tx)-celts" | games$away == "st.-thomas-(tx)-celts",]
+
+
+######(b) ###### 
+L5teams = names(X_s[,which(colSums(abs(X_s), dims = 1)<5)]) #Get names of teams played <5 games
+MoreThan5_games <- games[!(games$home %in% L5teams | games$away %in% L5teams),] #Exclude teams played <5 times in games
+X_5 <- X_s[!(games$home %in% L5teams | games$away %in% L5teams), !(colnames(X_s) %in% L5teams)] #Modify X_s matrix
+reg.season.games_5 = which(MoreThan5_games$gameType == "REG") #Modify the subset index
+y_5 = y[!(games$home %in% L5teams | games$away %in% L5teams)] #Exclude games from response 
+
+adv_5 <- 1 - MoreThan5_games$neutralLocation
+mod_5_1 = lm(y_5~ 0 + adv_5 + ., data=X_5, subset=reg.season.games_5)
+mod_5_2 <- glm(as.numeric(y_5>0) ~ 0 + adv_5 + ., family=binomial, data=X_5, subset=reg.season.games_5) 
+
+glm.coef.list = coef(mod_5_2)[paste("`",teams$team,"`",sep="")]
+names(glm.coef.list) = teams$team
+lm.coef.list<- coef(mod_5_1)[paste("`",teams$team,"`",sep="")]
+names(lm.coef.list) = teams$team
+glm.coef.list[teams$team == "stanford-cardinal"] = 0 
+lm.coef.list[teams$team=="stanford-cardinal"] = 0 
+
+rank.table2 = cbind("Linear"      = lm.coef.list,
+                   "Linear Rank" = rank(-lm.coef.list, ties.method = "min"),
+                   "Logistic" = glm.coef.list,
+                   "Linear Rank" = rank(-glm.coef.list, ties.method = "min"),
+                   "AP Rank"     = teams$apRank,
+                   "USAT Rank"   = teams$usaTodayRank)
+
+rank.table2[order(glm.coef.list,decreasing=TRUE)[1:25],]
+
+######(c) ###### 
+sum(summary(mod_5_1)$coef[,4] < 0.05)/ncol(X_5)
+sum(summary(mod_5_2)$coef[,4] < 0.05)/ncol(X_5)
+
+######(d) ###### 
+set.seed(2018) 
+fd <- sample(1:10,nrow(X_5),replace=TRUE) 
+mcnemar.tab <- matrix(0,2,2) 
+cvErr.lm = rep(0,10)
+cvErr.glm = rep(0,10)
+df = data.frame(X_5,adv_5)
+Table = list()
+for (f in unique(fd)) { 
+  train = fd != f
+  test = fd == f 
+  
+  glm.mod = glm(as.numeric(y_5>0) ~ 0 +., data=df, family=binomial, subset=train)
+  glm.probs = predict(glm.mod,newdata=df[test,], type = "response") 
+  glm.pred = ifelse(glm.probs > 0.5, 1, 0)
+  cvErr.glm[f] = mean(glm.pred != as.numeric(y_5>0)[test])
+  
+  
+  lm.mod = lm(y_5~ 0 + ., data=df, subset=train)
+  lm.marg = predict(lm.mod,newdata=df[test,])
+  lm.pred = ifelse(lm.marg > 0, 1, 0)
+  cvErr.lm[f] = mean(lm.pred != as.numeric(y_5>0)[test])
+  
+  Table[[f]] = table(lm.pred == as.numeric(y_5>0)[test], glm.pred == as.numeric(y_5>0)[test])
+} 
+
+newTable = Reduce("+", Table)
+newTable
+
+D = (newTable[2] + newTable[3])
+ninefiveInt = c(D/2 - 2*sqrt(D)/2, D/2 + 2*sqrt(D)/2)
+print(ninefiveInt)
+2*pnorm(266,(266+231)/2,sqrt(266+231)/2,lower.tail=F)
+
+```
+
+    
+
