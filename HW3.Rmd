@@ -1,0 +1,154 @@
+---
+title: "HW3"
+author: "Xinbei Guan"
+date: "March 3, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1
+(a) Best subset has the smallest training RSS because it is the best subset that fits the training data the best. 
+(b) It depends. Because the test data has never seen the model, so it is impossible to tell.
+(c)(i) True. By defintion of forward stepwise, the additional variable is picked to get the model with (k+1) variables and therefore it is a subset.   
+  (ii) True.By defintion of backward stepwise, a variable is picked to be excluded from the model with (k+1) variables and therefore it is predictors in the k-variable model is subset.  
+  (iii) False. The set of variables selected in a forward vs backward stepwise method are unrelated.
+  (iv) False. Same reason as in (iii)
+  (v) False. From the lecture example of the credit card default, we know that the variables in a 3-predictor model is not a subset of the 4-predictor model
+
+## Question 2
+(a) red
+(b) green
+(c) blue
+(d) brown
+(e) black
+```{r}
+x = rnorm(10)
+y = rnorm(10)*100 + x^2 + x^4
+```
+
+
+```{r}
+plot(x,y)
+lines(sort(x),predict(lm(y~0)), col = "red")
+lines(sort(x),predict(lm(y~1))[order(x)], col = "green")
+lines(sort(x),predict(lm(y~x))[order(x)], col = "blue")
+lines(sort(x),predict(lm(y~x+I(x^2)))[order(x)], col = "brown")
+lines(sort(x),y[order(x)]) 
+
+```
+
+## Question 3 (a)
+We can look at the height by gender because we know in general, male are taller than female. So value of 0 is female and value of 1 represents male.
+```{r}
+library(ISLR)
+library(pls) 
+setwd("C:/Users/xguan/Desktop/Winter2018/STATS216/hw3")
+load("body.RData")
+boxplot(Y$Height~Y$Gender)
+```
+
+## Question 3 (b)
+We need to scale our variable because even the variables are meatured under the same unit, the same length for one variable could mean something for another variable. For instance, wrist diameter has a mean of 10.54cm, but waist diameter would never be anywhere as low as 10.54cm
+```{r}
+set.seed(2018)
+train = sample(1:nrow(X),307)
+test = (1:nrow(X))[-train]
+plsr.fit = plsr(Y$Weight ~ .,data = X, scale = TRUE, validation="CV", subset=train) 
+pcr.fit = pcr(Y$Weight ~ .,data = X, scale = TRUE, validation="CV", subset=train)
+```
+
+## Question 3 (c)
+For any specifice number of component, the variance explained of X is always higher in pcr but the variance explained of weight is always better in plsr. This is because pcr only explaine the variance within the predictors themselves only and therefore will result in a higher %. But plsr also take into consideration of the variance of X in its relation with weight. 
+```{r}
+summary(plsr.fit)
+summary(pcr.fit)
+```
+
+## Question 3 (d)
+After plotting the cv error, it appears that using 2-3 components would be sufficient for predicting weight, especially if we apply ti 1-se rule here, adding any additional component would not result in significant improvement of our prediction. 
+```{r}
+par(mfrow = c(1,2))
+validationplot(plsr.fit, val.type = "MSEP", main = "PLS")
+validationplot(pcr.fit, val.type = "MSEP", main="PCR")
+```
+
+## Question 3 (e)
+Both methods above required knowing all 21 variables to predict weight. Neither of them allow prediction without knowing all 21 variables because the all the components are some linear combination of the 21 variables.  We need a method that can does feature selection in order to reduced the number of variables we need for prediction. From all methods we have learned, I choose Lasso Regression.
+```{r}
+library(glmnet)
+xl = as.matrix(X) 
+yl = Y$Weight
+
+lasso.fit=glmnet(xl[train,],yl[train])
+plot(lasso.fit)
+cv.lasso = cv.glmnet(xl[train,],yl[train])
+lasso.coef = predict(lasso.fit, s = cv.lasso$lambda.min , type = "coefficients")
+lasso.coef
+```
+
+## Question 3 (f)
+Out of all three models, Lasso is not only able to perform feature selection, but also results in the lowest MSE(9.255).
+```{r}
+plsr.pred = predict(plsr.fit, newdata = X[test,], id = 3)
+plsr.mse = mean((plsr.pred - Y$Weight[test])^2)
+plsr.mse
+
+pcr.pred = predict(pcr.fit, newdata = X[test,], id = 3)
+pcr.mse = mean((pcr.pred - Y$Weight[test])^2)
+pcr.mse
+
+lasso.pred=predict(lasso.fit,s = cv.lasso$lambda.min, newx=xl[test,])
+lasso.mse= mean((lasso.pred - yl[test])^2)
+lasso.mse
+```
+
+
+## Question 4
+(e)With k = 3, spline does a good job in approximating the function
+(g)When k is <=3, the fitted curve doesn't do quite well but beyond k = 3 the fitted curve does a good job approximating the truve curve. However, it doesn't improve much as k goes from 3 to 9 and therefore we don't expect adding number of knots would continue to improve the approximation because if we do, we will have a curve that goes through every point of the data and overfit. 
+```{r}
+
+h = function(x, z){max((x-z)^3, 0)}
+
+hs = function(xs,z){sapply(xs,h,z=z)}
+
+splinebasis = function(xs, zs){ 
+  mtx= cbind(xs,xs^2,xs^3)
+  for (i in 1:length(zs)){
+    mtx = cbind(mtx,as.matrix(hs(xs,zs[i])))
+  }
+  mtx
+}
+
+set.seed(1337) 
+x = runif(100) 
+y = sin(10*x)
+
+df = data.frame(y,splinebasis(x,c(1/4,2/4,3/4)))
+spline.fit3k = lm(y~., data = df)
+x_spaced = seq(0, 1, len = 100)
+plotdf = data.frame(splinebasis(x_spaced, c(1/4,2/4,3/4)))
+lm.pred = predict(spline.fit3k, newdata = plotdf)
+plot(x,y) 
+curve(sin(10*x),add = T, col = "red")
+lines(x_spaced,lm.pred, col = "blue")
+
+par(mfcol=c(3,3)) 
+for(i in 1:9){ 
+  knot = (1:i)/(1+i)
+  df = data.frame(y,splinebasis(x,knot))
+  spline.fit = lm(y~., data = df)
+  plotdf = data.frame(splinebasis(x_spaced, knot))
+  lm.pred = predict(spline.fit, newdata = plotdf)
+  plot(x,y, main=ifelse(i==1,paste(i,"knot"),paste(i,"knots")), ylab = "y")
+  curve(sin(10*x),add = T, col = "red")
+  lines(x_spaced,lm.pred, col = "blue")
+}
+
+```
+
