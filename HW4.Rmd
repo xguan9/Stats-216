@@ -1,0 +1,161 @@
+---
+title: "hw4"
+author: "Xinbei Guan"
+date: "March 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 2
+```{r}
+#(a)
+set.seed(1)
+dat1 = matrix(runif(25*45),ncol = 45)
+dat2 = matrix(runif(25*45),ncol = 45) - 0.1
+dat3 = matrix(runif(25*45),ncol = 45) + 0.2
+dat = rbind(dat1,dat2,dat3)
+#(b)
+pca = prcomp(dat, scale = T)
+y = rep(c(1,2,3),c(25,25,25))
+plot(pca$x[,1:2],col= 1+y)
+#(c)
+km3 = kmeans(dat,3,nstart = 10)
+table(km3$cluster,y)
+#(d)
+km2 = kmeans(dat,2,nstart = 10)
+table(km2$cluster,y)
+#(e)
+km4 = kmeans(dat,4,nstart = 10)
+table(km4$cluster,y)
+#(f)
+kmPCA = kmeans(pca$x[,1:2],3,nstart = 10)
+table(kmPCA$cluster,y)
+#(g)
+kmsc = kmeans(scale(dat),3,nstart = 10)
+table(y,kmsc$cluster)
+```
+(a) The mean is shifted for class 2 by subtracting 0.1 to each data point and for class 3 by adding 0.2 
+(b) Three clusters are clearly distinguishable in the plot shown
+(c) The true class label 1 corresponds to cluster 3, true class label 2 corresponds to cluster 2, and true class label 3 corresponds to cluster 1. In this case, 11 are incorrectly misplaced -- (1+8) = 9 points in the true cluster 1 and 2 points in the true cluster 2 are incorrect. 
+(d) If we choose K = 2, 21 points of true cluster 1 are grouped into cluster 2 as the new cluster 1 and 4 points of the true cluster 1 are grouped into cluster 3 as the new cluster 2. 
+(e) The true cluster 1 is the new cluster 3 with 8, 2 and 1 points spreaded through the new cluster 1, 2 and 4 respectivey. True cluster 2 becomes the new cluster 2 with 6 and 1 points spreaded throughout the new cluster 1 and 3. True cluster 3 becomes the new cluster 4, which contains 25 points from the original cluster 3 and one point from the original true cluster 1. 
+(f) Kmeans correctly places 61 points into the true cluster, which is pretty good but not as good as using the raw data. A total of 14 points are misplaced, 6 from true cluster 1 and 8 from true cluster 2. 
+(g) The cluster performs well, but compared to (c), this time it misplaces (2+9) = 11 points from the true cluster 3 into cluster 1 and 2. Also 3 points are misplaced from true cluster 2 into cluster 3. In total, 13 points are misplaced compared to 11 points in (c)
+
+
+
+## Question 3
+
+```{r 3a}
+require(ISLR)
+require(randomForest)
+setwd("C:/Users/xguan/Desktop/Winter2018/STATS216/hw4")
+load("body.RData")
+set.seed(2)
+train = sample(1:nrow(X),307)
+test = -train
+
+mse = matrix(NA, nrow = 500, ncol = 2)
+for (i in 1:500){
+bag = randomForest(Y$Weight[train] ~ .,data = X[train,], mtry = ncol(X), importance=TRUE, na.action=na.omit, ntree = i)
+bag.pred = predict(bag, newdata = X[test,])
+bag.mse = mean((bag.pred - Y$Weight[test])^2)
+mse[i,1] = bag.mse
+}
+
+for (i in 1:500){
+rf = randomForest(Y$Weight[train] ~ .,data = X[train,], importance=TRUE, na.action=na.omit, ntree = i)
+rf.pred = predict(rf, newdata = X[test,])
+rf.mse = mean((rf.pred - Y$Weight[test])^2)
+mse[i,2] = rf.mse
+}
+
+plot(1:500,as.vector(mse[,1]),type="l",col="red")
+lines(1:500,as.vector(mse[,2]),col="green")
+legend("topright", legend = paste(c("Test MSE: Bagging", "Test MSE: Random Forest"), sep = ""),col = c("red", "green"), lty = 1)
+```
+
+## Plots
+
+```{r 3b}
+
+# = randomForest (x = X[train,] , y = Y$Weight[train], xtest = X[test,] , ytest = Y$Weight[test] , mtry = ncol (X), importance = T)
+#forest = randomForest (x = X[train,] , y = Y$Weight[train], xtest = X[test,] , ytest = Y$Weight[test], importance = T)
+varImpPlot(rf)
+varImpPlot(bag)
+mse[500,2]
+```
+(b)
+As shown in the plots above, for random forest, the most important variables are 1)Hip.Girth 2)Waist.Girth 3)Knee.Girth 4)Thigh.Girth 5)Calf.Girth 
+For bagging, the most important variables are 1)Waist.Girth 2)Hip.Girth 3)Knee.Girth 4)Thigh.Girth 5)Forearm.Girth 
+
+Both random forest and bagging identify the top 4 most important variables to be Hip, Waist, Knee, and Thigh. 
+
+(c)
+In homework 3, the test error from plsr, pcr and lasso are 9.574607, 10.32057 and 9.255284, respectively. All of them have lower mse and perform better than the tree method 
+
+(d)
+From the plot of error vs number of trees, we can see that the error levels off as the number of trees gets beyond around 200. Therefore 500 trees are definitely enough and I would not include more trees. 
+
+## Question 4 (a)
+
+```{r 4a} 
+library(e1071)
+X1 = c (3 , 2 , 4 , 1 , 2 , 4 , 4) 
+X2 = c (4 , 2 , 4 , 4 , 1 , 3 , 1)
+Y = c("Red", "Red", "Red", "Red", "Blue", "Blue", "Blue")
+plot(X1, X2, col = Y, pch = 19, ylim = c(0, 5), xlim = c(0, 5))
+```
+
+```{r 4b}
+df = data.frame(X1,X2)
+df = data.frame(df,Y = as.factor(Y))
+svmfit=svm(Y~.,data=df,kernel="linear",cost=10,scale=FALSE)
+beta0=svmfit$rho
+beta=drop(t(svmfit$coefs)%*%as.matrix(df[svmfit$index,1:2]))
+plot(X1, X2, col = Y, pch = 19, xlim = c(0,5), ylim = c(0,5))
+abline(beta0/beta[2],-beta[1]/beta[2])
+paste("beta0 =",round(beta0,0), "beta1 =", round(beta[1],0), "beta2 =", round(beta[2],0))
+```
+(b) Given beta0 = -1 beta1 = -2 beta2 = 2, the equation of the seperating hyper plane is -1 - 2X1 + 2X2 = 0
+
+(c) Classify the point as red if -1 - 2X1 + 2X2 > 0, and classify the point as blue if -1 - 2X1 + 2X2 < 0
+```{r 4d}
+plot(X1, X2, col = Y, pch = 19, xlim = c(0,5), ylim = c(0,5))
+abline(beta0/beta[2],-beta[1]/beta[2])
+abline((beta0-1)/beta[2],-beta[1]/beta[2],lty=2)
+abline((beta0+1)/beta[2],-beta[1]/beta[2],lty=2)
+```
+(d) The width of margin is 1/sqrt(2)/2 = 0.35355
+```{r 4e}
+plot(X1, X2, col = Y, pch = 19, xlim = c(0,5), ylim = c(0,5))
+points(df[svmfit$index,],pch=25,cex=2)
+abline(beta0/beta[2],-beta[1]/beta[2])
+abline((beta0-1)/beta[2],-beta[1]/beta[2],lty=2)
+abline((beta0+1)/beta[2],-beta[1]/beta[2],lty=2)
+points (c(2,4,2,4), c(1,4,2,3),col='black', pch = 1 , cex =5) 
+```
+(e) The 4 support vectors are indicated on the plot by black circles. Originally, the support vectors identified by the svm function does not include the point (2,1), but since it appears it is on the margin, I decided to include it as a support vector.
+(f) A slight movement of the 7th observation is unlikely to affect the maximal margin hyperplane since this point is far away from the hyperplane itself. 
+(g) To plot a hyperplane that is not the maximum margin hyperplane, we can change the intercept and slope such as  
+```{r 4g}
+plot(X1, X2, col = Y, pch = 19, xlim = c(0,5), ylim = c(0,5))
+points (c(2,4,2,4), c(1,4,2,3),col='black', pch = 1 , cex =5) 
+abline(beta0/beta[2]+0.3,-beta[1]/beta[2]-0.15)
+paste("The equation is", round(beta0/beta[2]+0.3,1) , " + ", round(-beta[1]/beta[2]-0.15,1),"X1 - X2 = 0")
+
+```
+The equation is -0.2  +  0.9 X1 - X2 = 0"
+
+(h) The two classes are no longer seperable if the point (1,3), colored green in the new plot, is being added to the plot
+```{r 4h}
+bpoint = data.frame(1,3,"Blue")
+names(bpoint) = names(df)
+df2 = rbind(df,bpoint)
+plot(df2$X1, df2$X2, col = df2$Y, pch = 19, xlim = c(0,5), ylim = c(0,5))
+points (1,3,col='green', pch = 1 , cex =5) 
+```
+
